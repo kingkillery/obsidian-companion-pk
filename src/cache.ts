@@ -198,7 +198,12 @@ export class CompletionCacher {
 		if (queue.queue.length > 0) {
 			return;
 		}
-		this.fetch(prompt, stream);
+		this.fetch(prompt, stream).catch((error) => {
+			console.error("[Companion] completion fetch failed", error);
+			(window as any).__companion_last_completion_error =
+				error?.message || String(error);
+			queue.exhaust();
+		});
 	}
 
 	async *complete(
