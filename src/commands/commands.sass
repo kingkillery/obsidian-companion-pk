@@ -1,0 +1,35 @@
+.companion-slash-modal
+	min-width: 420px
+	overflow: hidden
+
+	.companion-slash-query
+		font-size: 1.05em
+		font-weight: 600
+		margin: 0.4rem 0
+		color: var(--text-muted)
+
+	.companion-slash-suggestions
+		max-height: 60vh
+		overflow-y: auto
+
+	.companion-slash-suggestion
+		display: block
+		width: 100%
+		padding: 0.5rem 0.6rem
+		border-radius: 6px
+		border: 1px solid transparent
+		margin: 0.2rem 0
+		cursor: pointer
+
+		strong
+			display: block
+
+		span
+			display: block
+			font-size: 0.9em
+			color: var(--text-faint)
+
+		&.is-selected
+			background: var(--background-modifier-active)
+			border-color: var(--interactive-accent)
+			color: var(--text-normal)

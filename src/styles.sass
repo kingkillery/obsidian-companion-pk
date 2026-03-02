@@ -1,0 +1,21 @@
+@import "settings/settings.sass"
+@import "complete/completers.sass"
+@import "commands/commands.sass"
+
+// Ghost text completion preview
+.cm-inline-suggestion
+    opacity: 0.55 !important
+    color: var(--text-accent) !important
+    font-style: italic
+
+    &::after
+        content: " Tab ⏎"
+        font-size: 0.65em
+        opacity: 0.5
+        color: var(--text-muted)
+        background: var(--background-modifier-hover)
+        padding: 1px 6px
+        border-radius: 4px
+        margin-left: 6px
+        font-style: normal
+        vertical-align: middle
