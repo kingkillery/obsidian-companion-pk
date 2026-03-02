@@ -13,6 +13,9 @@ import {
 import OpenAI from "openai";
 import Mustache from "mustache";
 
+const CONTINUATION_HARD_RULES =
+	"Output only insertable continuation text at the cursor. Do not explain your reasoning, do not describe what to do, and do not provide planning/meta commentary. Match the surrounding format and tone. If the cursor is in a list item, continue with list-item content only.";
+
 export default class ChatGPT implements Model {
 	id: string;
 	name: string;
@@ -36,11 +39,25 @@ export default class ChatGPT implements Model {
 	}
 
 	async prepare(prompt: Prompt, settings: ModelSettings): Promise<Prompt> {
-		const budget = settings.prompt_length || 6000;
-		return {
+		const configured = settings.prompt_length || 20000;
+		const budget = Math.min(Math.max(configured, 2000), 50000);
+		const suffix_budget = Math.max(Math.min(Math.floor(budget * 0.25), 8000), 1000);
+		const prepared: Prompt = {
+			...prompt,
 			prefix: prompt.prefix.slice(-budget),
-			suffix: prompt.suffix.slice(0, Math.ceil(budget / 10)),
+			suffix: prompt.suffix.slice(0, suffix_budget),
 		};
+		prepared.context = prepared.context || prepared.prefix;
+		prepared.last_line =
+			prepared.last_line || (prepared.prefix.split(/\r?\n/).pop() || "");
+		prepared["up_to_500-1500_chars_before_cursor"] =
+			prepared["up_to_500-1500_chars_before_cursor"] ||
+			prepared.prefix.slice(-1500);
+		prepared["up_to_200-800_chars_after_cursor"] =
+			prepared["up_to_200-800_chars_after_cursor"] ||
+			prepared.suffix.slice(0, 800);
+		prepared.reference_files_block = prepared.reference_files_block || "";
+		return prepared;
 	}
 
 	async generate_messages(
@@ -53,7 +70,9 @@ export default class ChatGPT implements Model {
 		return [
 			{
 				role: "system",
-				content: model_settings.system_prompt,
+				content: model_settings.system_prompt
+					? `${CONTINUATION_HARD_RULES}\n\n${model_settings.system_prompt}`
+					: CONTINUATION_HARD_RULES,
 			},
 			{
 				role: "user",
@@ -239,23 +258,22 @@ export class ChatGPTComplete implements Completer {
 		return [
 			new ChatGPT(
 				settings,
-				"gpt-3.5-turbo-1106",
-				"GPT 3.5 Turbo preview (recommended)",
-				"OpenAI's ChatGPT model, with a longer context window"
+				"gpt-4o-mini",
+				"GPT-4o mini (recommended)",
+				"Fast and cost-efficient OpenAI chat model"
+			),
+			new ChatGPT(
+				settings,
+				"gpt-4o",
+				"GPT-4o",
+				"Higher quality OpenAI chat model"
 			),
 			new ChatGPT(
 				settings,
 				"gpt-3.5-turbo",
-				"GPT 3.5 Turbo (old)",
-				"OpenAI's ChatGPT model"
+				"GPT-3.5 Turbo (legacy)",
+				"Legacy fallback chat model"
 			),
-			new ChatGPT(
-				settings,
-				"gpt-4-1106-preview",
-				"GPT 4 Turbo",
-				"OpenAI's GPT-4 model, with a longer context window"
-			),
-			new ChatGPT(settings, "gpt-4", "GPT 4", "OpenAI's GPT-4 model"),
 		];
 	}
 

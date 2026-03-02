@@ -3,6 +3,7 @@ import * as React from "react";
 export interface Prompt {
 	prefix: string;
 	suffix: string;
+	[key: string]: string | undefined;
 }
 
 export interface Model {

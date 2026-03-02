@@ -14,6 +14,8 @@ export class SlashCommandModal extends Modal {
 	private query_el: HTMLDivElement;
 	private list_el: HTMLDivElement;
 	private keydown_handler: ((event: KeyboardEvent) => void) | null;
+	private refresh_timer: number | null;
+	private refresh_request_id: number;
 
 	constructor(
 		app: App,
@@ -32,6 +34,8 @@ export class SlashCommandModal extends Modal {
 		this.suggestions = [];
 		this.selected = 0;
 		this.keydown_handler = null;
+		this.refresh_timer = null;
+		this.refresh_request_id = 0;
 	}
 
 	onOpen() {
@@ -78,10 +82,15 @@ export class SlashCommandModal extends Modal {
 		};
 		modalEl?.addEventListener("keydown", this.keydown_handler);
 
-		void this.refresh();
+		this.scheduleRefresh(0);
 	}
 
 	onClose() {
+		if (this.refresh_timer !== null) {
+			window.clearTimeout(this.refresh_timer);
+			this.refresh_timer = null;
+		}
+		this.refresh_request_id += 1;
 		if (this.modalEl && this.keydown_handler) {
 			this.modalEl.removeEventListener("keydown", this.keydown_handler);
 		}
@@ -94,16 +103,34 @@ export class SlashCommandModal extends Modal {
 
 	setQuery(query: string) {
 		this.query = query;
-		void this.refresh();
+		this.scheduleRefresh();
 	}
 
 	setTrigger(trigger: "/" | "@") {
 		this.trigger = trigger;
-		void this.refresh();
+		this.scheduleRefresh();
 	}
 
-	private async refresh() {
-		this.suggestions = await this.get_suggestions(this.query);
+	private scheduleRefresh(delay_ms = 80) {
+		if (this.refresh_timer !== null) {
+			window.clearTimeout(this.refresh_timer);
+		}
+		this.refresh_timer = window.setTimeout(() => {
+			this.refresh_timer = null;
+			this.refresh_request_id += 1;
+			void this.refresh(this.refresh_request_id);
+		}, delay_ms);
+	}
+
+	private async refresh(request_id: number) {
+		const suggestions = await this.get_suggestions(this.query);
+		if (request_id !== this.refresh_request_id) {
+			return;
+		}
+		if (!this.query_el || !this.list_el) {
+			return;
+		}
+		this.suggestions = suggestions;
 		if (this.suggestions.length > 0) {
 			this.selected = 0;
 		}

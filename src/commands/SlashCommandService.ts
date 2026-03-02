@@ -76,15 +76,17 @@ export class SlashCommandService {
 		const files = this.plugin.app.vault.getMarkdownFiles();
 		const normalized = (file_query || "").toLowerCase();
 		if (!normalized) {
-			return files.sort((a, b) => a.basename.localeCompare(b.basename));
+			return files.sort((a: TFile, b: TFile) =>
+				a.basename.localeCompare(b.basename)
+			);
 		}
 
 		return files
-			.filter((file) => {
+			.filter((file: TFile) => {
 				const haystack = `${file.path} ${file.basename}`.toLowerCase();
 				return haystack.includes(normalized);
 			})
-			.sort((a, b) => a.basename.localeCompare(b.basename));
+			.sort((a: TFile, b: TFile) => a.basename.localeCompare(b.basename));
 	}
 
 	private build_file_suggestions(

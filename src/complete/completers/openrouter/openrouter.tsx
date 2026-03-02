@@ -13,6 +13,15 @@ import {
 import OpenAI from "openai";
 import Mustache from "mustache";
 
+declare global {
+	interface Window {
+		__companion_last_openrouter_payload?: unknown;
+	}
+}
+
+const CONTINUATION_HARD_RULES =
+	"Output only insertable continuation text at the cursor. Do not explain your reasoning, do not describe what to do, and do not provide planning/meta commentary. Match the surrounding format and tone. If the cursor is in a list item, continue with list-item content only.";
+
 export default class OpenRouterModel implements Model {
 	id: string;
 	name: string;
@@ -36,11 +45,25 @@ export default class OpenRouterModel implements Model {
 	}
 
 	async prepare(prompt: Prompt, settings: ModelSettings): Promise<Prompt> {
-		const budget = settings.prompt_length || 6000;
-		return {
+		const configured = settings.prompt_length || 20000;
+		const budget = Math.min(Math.max(configured, 2000), 50000);
+		const suffix_budget = Math.max(Math.min(Math.floor(budget * 0.25), 8000), 1000);
+		const prepared: Prompt = {
+			...prompt,
 			prefix: prompt.prefix.slice(-budget),
-			suffix: prompt.suffix.slice(0, Math.ceil(budget / 10)),
+			suffix: prompt.suffix.slice(0, suffix_budget),
 		};
+		prepared.context = prepared.context || prepared.prefix;
+		prepared.last_line =
+			prepared.last_line || (prepared.prefix.split(/\r?\n/).pop() || "");
+		prepared["up_to_500-1500_chars_before_cursor"] =
+			prepared["up_to_500-1500_chars_before_cursor"] ||
+			prepared.prefix.slice(-1500);
+		prepared["up_to_200-800_chars_after_cursor"] =
+			prepared["up_to_200-800_chars_after_cursor"] ||
+			prepared.suffix.slice(0, 800);
+		prepared.reference_files_block = prepared.reference_files_block || "";
+		return prepared;
 	}
 
 	async generate_messages(
@@ -53,7 +76,9 @@ export default class OpenRouterModel implements Model {
 		return [
 			{
 				role: "system",
-				content: model_settings.system_prompt,
+				content: model_settings.system_prompt
+					? `${CONTINUATION_HARD_RULES}\n\n${model_settings.system_prompt}`
+					: CONTINUATION_HARD_RULES,
 			},
 			{
 				role: "user",
@@ -141,6 +166,24 @@ export default class OpenRouterModel implements Model {
 		});
 	}
 
+	private maybe_debug_payload(
+		mode: "complete" | "stream",
+		payload: unknown
+	): void {
+		if (!this.provider_settings.debug_prompt_payload) {
+			return;
+		}
+		const debug_payload = {
+			mode,
+			model: this.id,
+			timestamp: new Date().toISOString(),
+			payload,
+		};
+		window.__companion_last_openrouter_payload = debug_payload;
+		console.log("[Companion] OpenRouter payload", debug_payload);
+		new Notice(`[Companion] OpenRouter payload captured (${mode}).`);
+	}
+
 	// Extract text from response, handling reasoning models that return
 	// content in the reasoning field instead of content field
 	private extract_content(message: any): string {
@@ -171,6 +214,7 @@ export default class OpenRouterModel implements Model {
 			if (this.id.match(/gpt-oss|^o[1-9]/)) {
 				params.reasoning_effort = "low";
 			}
+			this.maybe_debug_payload("complete", params);
 			const response = await this.get_api().chat.completions.create(params);
 
 			return this.interpret(
@@ -198,12 +242,14 @@ export default class OpenRouterModel implements Model {
 			if (this.id.match(/gpt-oss|^o[1-9]/)) {
 				params.reasoning_effort = "low";
 			}
+			this.maybe_debug_payload("stream", params);
 			const completion = await this.get_api().chat.completions.create(params);
+			const stream = completion as unknown as AsyncIterable<any>;
 
 			// Buffer early tokens so interpret() sees enough text for sanitize
 			let buf = "";
 			let flushed = false;
-			for await (const chunk of completion) {
+			for await (const chunk of stream) {
 				const delta = chunk.choices[0]?.delta as any;
 				// Handle both normal content and reasoning model output
 				const token = delta?.content || delta?.reasoning || "";

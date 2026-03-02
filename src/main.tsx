@@ -17,7 +17,7 @@ import {
 import SettingsComponent from "./settings/settings";
 import { CompletionCacher } from "./cache";
 import { available } from "./complete/completers";
-import { Model } from "./complete/complete";
+import { Model, Prompt } from "./complete/complete";
 import { LinkGraphService } from "./links/LinkGraphService";
 import { SlashCommandModal } from "./commands/SlashCommandModal";
 import { SlashCommandService } from "./commands/SlashCommandService";
@@ -67,7 +67,7 @@ interface CompanionSettings {
 
 const DEFAULT_SETTINGS: CompanionSettings = {
 	provider: "openai-chatgpt",
-	model: "gpt3.5-turbo",
+	model: "gpt-4o-mini",
 	enable_by_default: false,
 	keybind: "Tab",
 	delay_ms: 500,
@@ -264,10 +264,10 @@ export default class Companion extends Plugin {
 		const cursor = editor.getCursor();
 		const line = editor.getLine(cursor.line) || "";
 		const before_cursor = line.substring(0, cursor.ch);
-		const candidates = [
+		const candidates = ([
 			{ trigger: "/", index: before_cursor.lastIndexOf("/") },
 			{ trigger: "@", index: before_cursor.lastIndexOf("@") },
-		]
+		] as { trigger: "/" | "@"; index: number }[])
 			.filter((candidate) => candidate.index >= 0)
 			.sort((a, b) => b.index - a.index);
 		if (!candidates.length) {
@@ -288,7 +288,7 @@ export default class Companion extends Plugin {
 
 		const query = token.substring(1);
 		const start_char = token_index;
-		const file = view.file;
+		const file = view.file || this.app.workspace.getActiveFile();
 		const cache = file ? this.app.metadataCache.getFileCache(file) : null;
 
 		return {
@@ -472,8 +472,18 @@ export default class Companion extends Plugin {
 			line: view.editor.lastLine(),
 			ch: view.editor.getLine(view.editor.lastLine()).length,
 		});
+		const file = view.file;
+		const prompt_meta: Partial<Prompt> = {
+			current_file_path: file?.path || "",
+			current_note_title: file?.basename || "",
+			context: prefix.slice(-20000),
+			last_line: (prefix.split(/\r?\n/).pop() || "").slice(-500),
+			"up_to_500-1500_chars_before_cursor": prefix.slice(-1500),
+			"up_to_200-800_chars_after_cursor": suffix.slice(0, 800),
+			reference_files_block: "",
+		};
 
-		yield* this.complete(prefix, suffix);
+		yield* this.complete(prefix, suffix, prompt_meta);
 	}
 
 	async acceptCompletion(editor: Editor) {
@@ -544,7 +554,8 @@ export default class Companion extends Plugin {
 		prefix: string,
 		suffix: string,
 		provider: string,
-		model: string
+		model: string,
+		prompt_meta: Partial<Prompt> = {}
 	): AsyncGenerator<Suggestion> {
 		const cacher = await this.get_model(provider, model);
 		if (!cacher) throw { name: "ModelNotFound" };
@@ -553,6 +564,7 @@ export default class Companion extends Plugin {
 			{
 				prefix: prefix,
 				suffix: suffix,
+				...prompt_meta,
 			},
 			this.settings.stream
 		)) {
@@ -577,7 +589,8 @@ export default class Companion extends Plugin {
 
 	async *fallback_complete(
 		prefix: string,
-		suffix: string
+		suffix: string,
+		prompt_meta: Partial<Prompt> = {}
 	): AsyncGenerator<Suggestion> {
 		if (this.settings.fallback) {
 			try {
@@ -589,7 +602,8 @@ export default class Companion extends Plugin {
 					prefix,
 					suffix,
 					fallback.provider,
-					fallback.model
+					fallback.model,
+					prompt_meta
 				);
 				if (!completion) return;
 				yield* completion;
@@ -601,7 +615,8 @@ export default class Companion extends Plugin {
 
 	async *complete(
 		prefix: string,
-		suffix: string
+		suffix: string,
+		prompt_meta: Partial<Prompt> = {}
 	): AsyncGenerator<Suggestion> {
 		try {
 			try {
@@ -609,13 +624,14 @@ export default class Companion extends Plugin {
 					prefix,
 					suffix,
 					this.settings.provider,
-					this.settings.model
+					this.settings.model,
+					prompt_meta
 				);
 				yield* completion;
 			} catch (e) {
 				if (e.name === "ModelNotFound") {
 					this.select_first_available_model();
-					yield* this.complete(prefix, suffix);
+					yield* this.complete(prefix, suffix, prompt_meta);
 					return;
 				}
 				throw e;
@@ -624,7 +640,7 @@ export default class Companion extends Plugin {
 			if (e.message) {
 				new Notice(`Error completing: ${e.message}`);
 			}
-			return this.fallback_complete(prefix, suffix);
+			return this.fallback_complete(prefix, suffix, prompt_meta);
 		}
 	}
 

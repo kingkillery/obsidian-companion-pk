@@ -130,6 +130,7 @@ export class CompletionCacher {
 		if (this.model.iterate && stream) {
 			// If it does, we stream the results
 			await this.fetch_iteratively(prompt);
+			return;
 		}
 		// Otherwise, we fetch a single completion
 		await this.fetch_blockwise(prompt);

@@ -19,6 +19,7 @@ const default_settings: Settings = {
 		"You complete the user's text at the cursor position. Output only the completion text — do not repeat any text before the cursor. Match the existing writing style and language. Be concise.",
 	user_prompt:
 		"Text before cursor:\n\n{{prefix}}\n\n[CURSOR IS HERE]{{#suffix}}\n\nText after cursor:\n\n{{suffix}}{{/suffix}}\n\nWrite only the completion at the cursor position:",
+	prompt_length: 20000,
 };
 
 export const parse_settings = (data: string | null): Settings => {
@@ -157,8 +158,9 @@ export function SettingsUI({
 				name="Prompt length"
 				description={
 					<>
-						The length of both the prefix and the suffix of the
-						prompt, in characters.
+						How much text context to include around the cursor, in
+						characters. Larger values improve context awareness but
+						may be slower and cost more.
 					</>
 				}
 			>
