@@ -11,7 +11,8 @@
 		"smoke:slash": "node scripts/electron-smoke.cjs",
 		"smoke": "npm run smoke:completion && npm run smoke:slash",
 		"copy-plugin": "node scripts/copy-plugin-to-vault.mjs",
-		"release:check": "node scripts/production-gate.mjs"
+		"release:check": "node scripts/production-gate.mjs",
+		"test:release-gate": "node scripts/production-gate.test.mjs"
 	},
 	"keywords": [],
 	"author": "rizerphe",
