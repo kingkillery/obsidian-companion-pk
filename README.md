@@ -47,6 +47,24 @@ To use Companion with OpenAI's ChatGPT models on your mobile device, follow thes
 
 If you have any issues with installation or usage, feel free to submit an issue at the [plugin's GitHub repository](https://github.com/rizerphe/obsidian-companion).
 
+## Production readiness
+
+Use these commands before release pushes:
+
+- `npm run prod-readiness`
+  - Runs parser tests (`npm test`) and full production gate (`build + copy-plugin + smoke checks`).
+- `npm run preflight`
+  - Runs production gate preflight only (no copy, no smoke), useful for a fast local validation.
+- `npm run release:check -- --vault A --vault B`
+  - Runs the full gate against multiple vaults before copying/smoke.
+
+Recommended sequence:
+
+```bash
+npm run build
+npm run prod-readiness
+```
+
 ## Groq
 
 Groq is an ultrafast model provider, and for now (end of May 2024) is fully free - their paid plans are still "coming soon". Groq has very generous usage quotas. This is probably the best choice right now. Just switch the provider to groq, set your API key and you're good to go!
