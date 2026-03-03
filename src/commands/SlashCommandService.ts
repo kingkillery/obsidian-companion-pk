@@ -2,6 +2,7 @@ import { normalizePath, Notice, TFile } from "obsidian";
 import type { SlashContext, SlashSuggestion } from "./types";
 import { LinkGraphService } from "../links/LinkGraphService";
 import { LinkIntelligenceService } from "../links/LinkIntelligenceService";
+import type { SlashCommandExecutionResult } from "../main";
 
 const DEFAULT_DAILY_NOTE_PATH = "Daily";
 type FileCommand = "open" | "link";
@@ -406,96 +407,178 @@ export class SlashCommandService {
 			.slice(0, clamp(this.plugin.settings.slash_max_suggestions, 1, 24));
 	}
 
-	async execute_command(id: string, ctx: SlashContext): Promise<void> {
+	async execute_command(
+		id: string,
+		ctx: SlashContext
+	): Promise<SlashCommandExecutionResult> {
 		this.consume_trigger(ctx);
-		if (ctx.command_trigger === "@") {
-			const parsed = /^(open|link)::(.+)$/.exec(id);
-			if (parsed) {
+		try {
+			if (ctx.command_trigger === "@") {
+				const parsed = /^(open|link)::(.+)$/.exec(id);
+				if (!parsed) {
+					new Notice("Unknown @ command.");
+					return {
+						success: false,
+						reason: "Unknown @ command.",
+					};
+				}
 				const command = parsed[1] as FileCommand;
 				const file_path = decodeURIComponent(parsed[2] || "");
 				if (command === "open") {
-					await this.open_file_target(ctx, file_path);
-					return;
+					return this.open_file_target(ctx, file_path);
 				}
-				if (command === "link") {
-					await this.insert_file_link(ctx, file_path);
-					return;
-				}
+				return this.insert_file_link(ctx, file_path);
 			}
-			new Notice("Unknown @ command.");
-			return;
-		}
-		if (id === "create-daily") {
-			await this.create_daily(ctx);
-			return;
-		}
-		if (id === "todo") {
-			await this.todo_vault_scan(ctx);
-			return;
-		}
-		if (id === "todo-local") {
-			await this.todo_local_scan(ctx);
-			return;
-		}
-		if (id === "scan-todo") {
-			await this.todo_local_scan(ctx);
-			return;
-		}
-		if (id === "summarize") {
-			const summary = await this.run_summary(ctx);
-			if (!summary) return;
-			const block = `\n\n## Summary\n${summary}\n`;
-			const cursor = ctx.editor.getCursor();
-			ctx.editor.replaceRange(block, cursor);
-			return;
-		}
-		if (id === "todo-scan") {
-			await this.todo_scan(ctx);
-			return;
-		}
-		if (id === "sync-note") {
-			await this.sync_note(ctx);
-			return;
-		}
-		if (id === "link-intelligence") {
-			await this.link_intelligence(ctx);
-			return;
-		}
-		if (id === "reciprocal-link") {
-			await this.reciprocal_link(ctx);
-			return;
-		}
 
-		new Notice(`Unknown slash command: ${id}`);
+			if (id === "create-daily") {
+				await this.create_daily(ctx);
+				return {
+					success: true,
+					reason: "Created or opened daily note.",
+				};
+			}
+			if (id === "todo") {
+				await this.todo_vault_scan(ctx);
+				return {
+					success: true,
+					reason: "Created vault TODO scan.",
+				};
+			}
+			if (id === "todo-local") {
+				await this.todo_local_scan(ctx);
+				return {
+					success: true,
+					reason: "Created local TODO scan.",
+				};
+			}
+			if (id === "scan-todo") {
+				await this.todo_local_scan(ctx);
+				return {
+					success: true,
+					reason: "Created local TODO scan.",
+				};
+			}
+			if (id === "summarize") {
+				const summary = await this.run_summary(ctx);
+				if (!summary) {
+					return {
+						success: false,
+						reason: "No selected text for summarize.",
+					};
+				}
+				const block = `\n\n## Summary\n${summary}\n`;
+				const cursor = ctx.editor.getCursor();
+				ctx.editor.replaceRange(block, cursor);
+				return {
+					success: true,
+					reason: "Inserted text summary.",
+				};
+			}
+			if (id === "todo-scan") {
+				await this.todo_scan(ctx);
+				return {
+					success: true,
+					reason: "Inserted local TODO scan section.",
+				};
+			}
+			if (id === "sync-note") {
+				await this.sync_note(ctx);
+				return {
+					success: true,
+					reason: "Synced link metadata.",
+				};
+			}
+			if (id === "link-intelligence") {
+				await this.link_intelligence(ctx);
+				return {
+					success: true,
+					reason: "Inserted link intelligence.",
+				};
+			}
+			if (id === "reciprocal-link") {
+				await this.reciprocal_link(ctx);
+				return {
+					success: true,
+					reason: "Added reciprocal link.",
+				};
+			}
+
+			new Notice(`Unknown slash command: ${id}`);
+			return {
+				success: false,
+				reason: `Unknown slash command: ${id}`,
+			};
+		} catch (error) {
+			const reason = `Error executing slash command: ${
+				error instanceof Error ? error.message : String(error || "")
+			}`;
+			new Notice(reason);
+			return {
+				success: false,
+				reason,
+			};
+		}
 	}
 
 	private async open_file_target(
 		ctx: SlashContext,
 		file_path: string
-	): Promise<void> {
+	): Promise<SlashCommandExecutionResult> {
 		const target = this.plugin.app.vault.getAbstractFileByPath(file_path);
 		if (!target || !(target instanceof TFile)) {
 			new Notice(`Could not find file: ${file_path}`);
-			return;
+			return {
+				success: false,
+				reason: `Could not find file: ${file_path}`,
+				file_path,
+			};
 		}
-		await this.plugin.app.workspace.getLeaf().openFile(target, {
-			active: true,
-		});
+		try {
+			await this.plugin.app.workspace.getLeaf().openFile(target, {
+				active: true,
+			});
+			return {
+				success: true,
+				file_path,
+			};
+		} catch (e) {
+			return {
+				success: false,
+				file_path,
+				reason: `Failed to open file: ${file_path}`,
+			};
+		}
 	}
 
 	private async insert_file_link(
 		ctx: SlashContext,
 		file_path: string
-	): Promise<void> {
+	): Promise<SlashCommandExecutionResult> {
 		const target = this.plugin.app.vault.getAbstractFileByPath(file_path);
 		if (!target || !(target instanceof TFile)) {
 			new Notice(`Could not find file: ${file_path}`);
-			return;
+			return {
+				success: false,
+				reason: `Could not find file: ${file_path}`,
+				file_path,
+			};
 		}
 		const link_target = target.path.replace(/\.md$/i, "");
 		const cursor = ctx.editor.getCursor();
-		await ctx.editor.replaceRange(`[[${link_target}]]`, cursor);
-		new Notice(`Inserted link to ${target.basename}.`);
+		try {
+			await ctx.editor.replaceRange(`[[${link_target}]]`, cursor);
+			new Notice(`Inserted link to ${target.basename}.`);
+			return {
+				success: true,
+				file_path,
+			};
+		} catch (e) {
+			return {
+				success: false,
+				reason: "Failed to insert link.",
+				file_path,
+			};
+		}
 	}
 
 	private async create_daily(ctx: SlashContext): Promise<void> {

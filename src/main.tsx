@@ -23,6 +23,45 @@ import { SlashCommandModal } from "./commands/SlashCommandModal";
 import { SlashCommandService } from "./commands/SlashCommandService";
 import { SlashContext } from "./commands/types";
 
+export type CompletionStatus =
+	| "idle"
+	| "running"
+	| "suggested"
+	| "accepted"
+	| "missing_suggestion"
+	| "error";
+
+export interface CompletionResultTelemetry {
+	status: CompletionStatus;
+	provider: string;
+	model: string;
+	timestamp: string;
+	elapsed_ms?: number;
+	suggestion_len?: number;
+	error_code?: string;
+	error_message?: string;
+}
+
+export type SlashCommandStatus = "idle" | "running" | "success" | "failure";
+
+export interface SlashCommandResultTelemetry {
+	status: SlashCommandStatus;
+	trigger: "/" | "@";
+	query: string;
+	command_id: string;
+	reason?: string;
+	file_path?: string;
+	elapsed_ms?: number;
+	timestamp: string;
+}
+
+declare global {
+	interface Window {
+		__companion_last_completion_result?: CompletionResultTelemetry;
+		__companion_last_slash_command_result?: SlashCommandResultTelemetry;
+	}
+}
+
 interface CompanionModelSettings {
 	name: string;
 	provider: string;
@@ -103,6 +142,57 @@ export default class Companion extends Plugin {
 	link_graph_service: LinkGraphService | null = null;
 	slash_command_service: SlashCommandService | null = null;
 	slash_command_modal: SlashCommandModal | null = null;
+
+	private parse_error_code(error: unknown): string | undefined {
+		if (error && typeof error === "object" && "name" in error) {
+			const named = error as { name?: string };
+			if (named.name) return named.name;
+		}
+		if (error && typeof error === "object" && "status" in error) {
+			const status = (error as { status?: number }).status;
+			return status ? `HTTP_${status}` : undefined;
+		}
+		if (error instanceof Error) {
+			return error.name || "Error";
+		}
+		return typeof error === "string" ? error : "Error";
+	}
+
+	private parse_error_message(error: unknown): string {
+		if (error && typeof error === "object" && "message" in error) {
+			const message = (error as { message?: unknown }).message;
+			return typeof message === "string" ? message : String(message || "");
+		}
+		if (error instanceof Error) {
+			return error.message;
+		}
+		return String(error || "");
+	}
+
+	set_global_completion_result(result: CompletionResultTelemetry) {
+		(window as any).__companion_last_completion_result = result;
+	}
+
+	set_global_slash_command_result(
+		command_id: string,
+		trigger: "/" | "@",
+		query: string,
+		status: SlashCommandStatus,
+		reason?: string,
+		file_path?: string,
+		elapsed_ms?: number
+	) {
+		(window as any).__companion_last_slash_command_result = {
+			status,
+			trigger,
+			query,
+			command_id,
+			reason,
+			file_path,
+			elapsed_ms,
+			timestamp: new Date().toISOString(),
+		};
+	}
 
 	async setupModelChoice() {
 		await this.loadSettings();
@@ -341,12 +431,41 @@ export default class Companion extends Plugin {
 				async (suggestion) => {
 					const latestContext = this.extractSlashContext(editor, view);
 					const used_context = latestContext || context;
-					await this.slash_command_service?.execute_command(
+					const commandStart = Date.now();
+					this.set_global_slash_command_result(
+						suggestion.id,
+						used_context.command_trigger,
+						used_context.query,
+						"running"
+					);
+					const result = await this.slash_command_service?.execute_command(
 						suggestion.id,
 						used_context
 					);
-					this.slash_command_modal?.close();
-					this.slash_command_modal = null;
+					if (result?.success) {
+						this.set_global_slash_command_result(
+							suggestion.id,
+							used_context.command_trigger,
+							used_context.query,
+							"success",
+							undefined,
+							result.file_path,
+							Date.now() - commandStart
+						);
+						this.slash_command_modal?.close();
+						this.slash_command_modal = null;
+						return;
+					}
+					this.set_global_slash_command_result(
+						suggestion.id,
+						used_context.command_trigger,
+						used_context.query,
+						"failure",
+						result?.reason || "Command execution failed.",
+						result.file_path,
+						Date.now() - commandStart
+					);
+					new Notice(result?.reason || "Command execution failed.");
 				},
 				() => {
 					this.slash_command_modal = null;
@@ -366,6 +485,13 @@ export default class Companion extends Plugin {
 		await this.setupStatusbar();
 		await this.setupSuggestionCommands();
 		await this.setupSlashCommands();
+		this.set_global_completion_result({
+			status: "idle",
+			provider: this.settings.provider,
+			model: this.settings.model,
+			timestamp: new Date().toISOString(),
+		});
+		this.set_global_slash_command_result("", "/", "", "idle");
 
 		this.addSettingTab(new CompanionSettingsTab(this.app, this));
 	}
@@ -489,19 +615,63 @@ export default class Companion extends Plugin {
 	async acceptCompletion(editor: Editor) {
 		const suggestion = this.last_used_model?.last_suggestion;
 		if (suggestion) {
-			editor.replaceRange(suggestion, editor.getCursor());
-			editor.setCursor({
-				ch:
-					suggestion.split("\n").length > 1
-						? suggestion.split("\n")[
-								suggestion.split("\n").length - 1
-						  ].length
-						: editor.getCursor().ch + suggestion.length,
-				line:
-					editor.getCursor().line + suggestion.split("\n").length - 1,
-			});
-			this.force_fetch();
+			const beforeCursor = editor.getCursor();
+			const beforeLength = editor.getValue().length;
+			try {
+				editor.replaceRange(suggestion, beforeCursor);
+				const afterCursor = {
+					ch:
+						suggestion.split("\n").length > 1
+							? suggestion.split("\n")[
+									suggestion.split("\n").length - 1
+							  ].length
+							: beforeCursor.ch + suggestion.length,
+					line:
+						beforeCursor.line + suggestion.split("\n").length - 1,
+				};
+				editor.setCursor(afterCursor);
+				const afterLength = editor.getValue().length;
+				if (afterLength > beforeLength) {
+					this.set_global_completion_result({
+						status: "accepted",
+						provider: this.last_used_model?.model.id || this.settings.provider,
+						model: this.last_used_model?.model.id || this.settings.model,
+						timestamp: new Date().toISOString(),
+						elapsed_ms: 0,
+						suggestion_len: Math.max(0, afterLength - beforeLength),
+					});
+					this.force_fetch();
+				} else {
+					this.set_global_completion_result({
+						status: "error",
+						provider: this.last_used_model?.model.id || this.settings.provider,
+						model: this.last_used_model?.model.id || this.settings.model,
+						timestamp: new Date().toISOString(),
+						error_code: "NO_MUTATION",
+						error_message: "Suggestion insertion did not change document.",
+					});
+				}
+			} catch (e) {
+				this.set_global_completion_result({
+					status: "error",
+					provider: this.last_used_model?.model.id || this.settings.provider,
+					model: this.last_used_model?.model.id || this.settings.model,
+					timestamp: new Date().toISOString(),
+					error_code: this.parse_error_code(e),
+					error_message: this.parse_error_message(e),
+				});
+			}
+			return;
 		}
+		this.set_global_completion_result({
+			status: "missing_suggestion",
+			provider: this.last_used_model?.model.id || this.settings.provider,
+			model: this.last_used_model?.model.id || this.settings.model,
+			timestamp: new Date().toISOString(),
+			error_code: "NO_SUGGESTION",
+			error_message: "No suggestion is currently available to accept.",
+		});
+		new Notice("No completion suggestion to accept.");
 	}
 
 	async get_model(
@@ -534,7 +704,14 @@ export default class Companion extends Plugin {
 				? provider_settings.models[available_model.id]
 				: "",
 			this.settings.accept,
-			this.settings.keybind == null
+			this.settings.keybind == null,
+			{
+				provider,
+				model: available_model.id,
+				report_completion_result: (result) => {
+					this.set_global_completion_result(result);
+				},
+			}
 		);
 		this.models.push({
 			provider: provider,
@@ -638,6 +815,14 @@ export default class Companion extends Plugin {
 			}
 		} catch (e) {
 			if (e.message) {
+				this.set_global_completion_result({
+					status: "error",
+					provider: this.settings.provider,
+					model: this.settings.model,
+					timestamp: new Date().toISOString(),
+					error_code: this.parse_error_code(e),
+					error_message: this.parse_error_message(e),
+				});
 				new Notice(`Error completing: ${e.message}`);
 			}
 			return this.fallback_complete(prefix, suffix, prompt_meta);

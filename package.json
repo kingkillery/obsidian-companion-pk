@@ -6,7 +6,12 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"version": "node version-bump.mjs && git add manifest.json versions.json"
+		"version": "node version-bump.mjs && git add manifest.json versions.json",
+		"smoke:completion": "node scripts/electron-completion-accept-check.cjs",
+		"smoke:slash": "node scripts/electron-smoke.cjs",
+		"smoke": "npm run smoke:completion && npm run smoke:slash",
+		"copy-plugin": "node scripts/copy-plugin-to-vault.mjs",
+		"release:check": "node scripts/production-gate.mjs"
 	},
 	"keywords": [],
 	"author": "rizerphe",

@@ -5,7 +5,7 @@ export class SlashCommandModal extends Modal {
 	private get_suggestions: (query: string) => Promise<SlashSuggestion[]>;
 	private on_command: (
 		suggestion: SlashSuggestion
-	) => Promise<void>;
+	) => Promise<unknown>;
 	private trigger: "/" | "@";
 	private on_close?: () => void;
 	private query: string;
@@ -22,7 +22,7 @@ export class SlashCommandModal extends Modal {
 		query: string,
 		trigger: "/" | "@",
 		get_suggestions: (query: string) => Promise<SlashSuggestion[]>,
-		on_command: (suggestion: SlashSuggestion) => Promise<void>,
+		on_command: (suggestion: SlashSuggestion) => Promise<unknown>,
 		on_close?: () => void
 	) {
 		super(app);

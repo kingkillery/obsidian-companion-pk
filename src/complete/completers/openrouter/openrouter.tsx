@@ -242,7 +242,8 @@ export default class OpenRouterModel implements Model {
 
 	private maybe_debug_payload(
 		mode: "complete" | "stream",
-		payload: unknown
+		payload: unknown,
+		attempt: "primary" | "rescue"
 	): void {
 		if (!this.provider_settings.debug_prompt_payload) {
 			return;
@@ -250,6 +251,7 @@ export default class OpenRouterModel implements Model {
 		const debug_payload = {
 			mode,
 			model: this.id,
+			attempt,
 			timestamp: new Date().toISOString(),
 			payload,
 		};
@@ -339,7 +341,7 @@ export default class OpenRouterModel implements Model {
 
 		try {
 			const params = await this.build_params(prompt, model_settings, false);
-			this.maybe_debug_payload("complete", params);
+			this.maybe_debug_payload("complete", params, "primary");
 			const raw_completion = await this.request_completion_text(params);
 			let interpreted = this.interpret(prompt, raw_completion);
 
@@ -355,7 +357,7 @@ export default class OpenRouterModel implements Model {
 					false,
 					MORPH_RESCUE_MODEL
 				);
-				this.maybe_debug_payload("complete", rescue_params);
+				this.maybe_debug_payload("complete", rescue_params, "rescue");
 				const rescue_text = await this.request_completion_text(rescue_params);
 				interpreted = this.interpret(prompt, rescue_text);
 			}
@@ -380,7 +382,7 @@ export default class OpenRouterModel implements Model {
 
 		try {
 			const params = await this.build_params(prompt, model_settings, true);
-			this.maybe_debug_payload("stream", params);
+			this.maybe_debug_payload("stream", params, "primary");
 			const response = await this.post_chat_completion(params);
 			if (!response.ok || !response.body) {
 				const text = await response.text();

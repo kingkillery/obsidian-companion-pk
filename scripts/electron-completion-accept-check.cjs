@@ -18,6 +18,8 @@ const { chromium } = require("playwright-core");
       afterLength: 0,
       insertedChars: 0,
       error: null,
+      completionResult: null,
+      completionAcceptStatus: null,
     };
 
     try {
@@ -87,6 +89,7 @@ const { chromium } = require("playwright-core");
       out.afterLength = after.length;
       out.insertedChars = out.afterLength - out.beforeLength;
       out.accepted = out.insertedChars > 0 && after !== before;
+      out.completionAcceptStatus = window.__companion_last_completion_result;
 
       plugin.settings.stream = prevStream;
       return out;
@@ -95,6 +98,8 @@ const { chromium } = require("playwright-core");
       return out;
     }
   });
+
+  result.completionResult = window.__companion_last_completion_result || null;
 
   console.log(JSON.stringify(result, null, 2));
   await browser.close();

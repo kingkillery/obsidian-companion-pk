@@ -21,8 +21,12 @@ const { chromium } = require("playwright-core");
       payloadHasUnrenderedTemplateMarkers: false,
       userMessageHasPathValue: false,
       userMessageHasCursorBlocks: false,
+      completionResult: null,
+      slashCommandResult: null,
       atOpenExecWorked: false,
       atLinkExecWorked: false,
+      atOpenExecResult: null,
+      atLinkExecResult: null,
     };
 
     const app = window.app;
@@ -86,8 +90,13 @@ const { chromium } = require("playwright-core");
       );
       const firstLink = linkSuggestions.find((s) => s.id.startsWith("link::"));
       if (firstLink) {
-        await plugin.slash_command_service.execute_command(firstLink.id, linkCtx);
-        out.atLinkExecWorked = editor.getValue().includes("[[Welcome");
+        out.atLinkExecResult = await plugin.slash_command_service.execute_command(
+          firstLink.id,
+          linkCtx
+        );
+        out.atLinkExecWorked =
+          !!out.atLinkExecResult?.success &&
+          editor.getValue().includes("[[Welcome");
       }
     } catch (e) {
       out.atLinkExecError = String(e);
@@ -104,7 +113,10 @@ const { chromium } = require("playwright-core");
       );
       const firstOpen = openSuggestions.find((s) => s.id.startsWith("open::"));
       if (firstOpen) {
-        await plugin.slash_command_service.execute_command(firstOpen.id, openCtx);
+        out.atOpenExecResult = await plugin.slash_command_service.execute_command(
+          firstOpen.id,
+          openCtx
+        );
         const activePath = app.workspace.getActiveFile()?.path || "";
         out.atOpenExecWorked = activePath.toLowerCase().includes("welcome.md");
       }
@@ -189,6 +201,9 @@ const { chromium } = require("playwright-core");
         out.userMessageParseError = String(e);
       }
     }
+
+    out.completionResult = window.__companion_last_completion_result || null;
+    out.slashCommandResult = window.__companion_last_slash_command_result || null;
 
     return out;
   });
