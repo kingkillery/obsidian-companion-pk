@@ -2,6 +2,50 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+function parseReleaseGateArgs(args) {
+  const copyArgs = [];
+  const options = {
+    skipSmoke: false,
+    skipCopy: false,
+  };
+
+  for (let idx = 0; idx < args.length; idx++) {
+    const token = args[idx];
+    if (token === "--skip-smoke" || token === "--no-smoke") {
+      options.skipSmoke = true;
+      continue;
+    }
+    if (token === "--skip-copy") {
+      options.skipCopy = true;
+      continue;
+    }
+    if (token === "--vault") {
+      if (args[idx + 1]) {
+        copyArgs.push(token, args[idx + 1]);
+        idx += 1;
+      }
+      continue;
+    }
+    if (token === "--vaults") {
+      if (args[idx + 1]) {
+        copyArgs.push(token, args[idx + 1]);
+        idx += 1;
+      }
+      continue;
+    }
+    copyArgs.push(token);
+  }
+
+  if (process.env.RELEASE_CHECK_SKIP_SMOKE === "1") {
+    options.skipSmoke = true;
+  }
+  if (process.env.RELEASE_CHECK_SKIP_COPY === "1") {
+    options.skipCopy = true;
+  }
+
+  return { copyArgs, options };
+}
+
 function splitVaultList(value) {
   if (!value || typeof value !== "string") {
     return [];
@@ -244,7 +288,9 @@ function runCommand(name, command, args = [], cwd = process.cwd(), env = {}) {
 }
 
 const repoRoot = process.cwd();
-const copyPluginArgs = process.argv.slice(2);
+const { copyArgs: copyPluginArgs, options: gateOptions } = parseReleaseGateArgs(
+  process.argv.slice(2)
+);
 const copyCommand = copyPluginArgs.length
   ? ["run", "copy-plugin", "--", ...copyPluginArgs]
   : ["run", "copy-plugin"];
@@ -274,7 +320,7 @@ steps.push({
 if (!preflightStep.passed) {
   ok = false;
 } else {
-for (const command of [
+  const commandSteps = [
     {
       name: "build",
       command: "npm",
@@ -282,7 +328,10 @@ for (const command of [
       run: () => runCommand("build", "npm", ["run", "build"], repoRoot),
       validate: (result) => result.exitCode === 0,
     },
-    {
+  ];
+
+  if (!gateOptions.skipCopy) {
+    commandSteps.push({
       name: "copy-to-vault",
       command: "npm",
       args: ["run", "copy-plugin", ...copyCommand.slice(1)],
@@ -299,12 +348,21 @@ for (const command of [
           vaultResults.every((entry) => entry?.all_hashes_match === true)
         );
       },
-    },
-    {
+    });
+  }
+
+  if (!gateOptions.skipSmoke) {
+    commandSteps.push({
       name: "smoke-completion",
       command: "npm",
       args: ["run", "smoke:completion"],
-      run: () => runCommand("smoke-completion", "npm", ["run", "smoke:completion"], repoRoot),
+      run: () =>
+        runCommand(
+          "smoke-completion",
+          "npm",
+          ["run", "smoke:completion"],
+          repoRoot
+        ),
       validate: (result) => {
         if (result.exitCode !== 0) return false;
         const out = result.parsed || {};
@@ -314,12 +372,13 @@ for (const command of [
         const completion = out.completionResult?.status || null;
         return !!accepted || completion === "accepted";
       },
-    },
-    {
+    });
+    commandSteps.push({
       name: "smoke-slash",
       command: "npm",
       args: ["run", "smoke:slash"],
-      run: () => runCommand("smoke-slash", "npm", ["run", "smoke:slash"], repoRoot),
+      run: () =>
+        runCommand("smoke-slash", "npm", ["run", "smoke:slash"], repoRoot),
       validate: (result) => {
         if (result.exitCode !== 0) return false;
         const out = result.parsed || {};
@@ -330,8 +389,10 @@ for (const command of [
           (!out.atLinkExecResult || out.atLinkExecResult.success !== false)
         );
       },
-    },
-  ]) {
+    });
+  }
+
+  for (const command of commandSteps) {
     const startedAt = now_iso();
     const startedTs = Date.now();
     const result = command.run();
@@ -357,6 +418,20 @@ for (const command of [
       ok = false;
       break;
     }
+  }
+  if (commandSteps.length === 0) {
+    steps.push({
+      name: "skip-phase",
+      passed: true,
+      duration_ms: 0,
+      command: "release-gate",
+      args: ["--skip-smoke", "--skip-copy"],
+      started_at: now_iso(),
+      ended_at: now_iso(),
+      output: {
+        skipped: "All runtime phases were skipped; no copy or smoke targets configured to run",
+      },
+    });
   }
 }
 
