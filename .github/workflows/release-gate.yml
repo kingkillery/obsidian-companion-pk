@@ -46,3 +46,21 @@ jobs:
           RELEASE_CHECK_SKIP_SMOKE: 1
           OBSIDIAN_VAULT_PATHS: "${{ github.workspace }}/.github-ci-vault"
         run: npm run release:check -- --vaults "$OBSIDIAN_VAULT_PATHS"
+
+      - name: Upload release-gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-${{ github.sha }}
+          path: artifacts/production-gate-*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload copy artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: copy-plugin-${{ github.sha }}
+          path: artifacts/copy-plugin-*.json
+          if-no-files-found: ignore
+          retention-days: 14
