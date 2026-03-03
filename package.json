@@ -1,44 +1,47 @@
 {
-	"name": "obsidian-companion",
-	"version": "1.8.0",
-	"description": "Autocomplete with AI, including ChatGPT, through a copilot-like interface.",
-	"main": "main.js",
-	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"version": "node version-bump.mjs && git add manifest.json versions.json",
-		"smoke:completion": "node scripts/electron-completion-accept-check.cjs",
-		"smoke:slash": "node scripts/electron-smoke.cjs",
-		"smoke": "npm run smoke:completion && npm run smoke:slash",
-		"copy-plugin": "node scripts/copy-plugin-to-vault.mjs",
-		"release:check": "node scripts/production-gate.mjs",
-		"test:release-gate": "node scripts/production-gate.test.mjs"
-	},
-	"keywords": [],
-	"author": "rizerphe",
-	"license": "MIT",
-	"devDependencies": {
-		"@types/node": "^16.11.6",
-		"@typescript-eslint/eslint-plugin": "5.29.0",
-		"@typescript-eslint/parser": "5.29.0",
-		"builtin-modules": "3.3.0",
-		"esbuild": "0.17.3",
-		"obsidian": "latest",
-		"tslib": "2.4.0",
-		"typescript": "4.7.4"
-	},
-	"dependencies": {
-		"@types/mustache": "^4.2.2",
-		"@types/react": "^18.0.28",
-		"@types/react-dom": "^18.0.11",
-		"codemirror-companion-extension": "^0.0.11",
-		"esbuild-sass-plugin": "^2.6.0",
-		"groq-sdk": "^0.37.0",
-		"mustache": "^4.2.0",
-		"openai": "^4.17.0",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0",
-		"sass": "^1.59.2",
-		"zod": "^3.21.4"
-	}
+    "name":  "obsidian-companion",
+    "version":  "1.8.0",
+    "description":  "Autocomplete with AI, including ChatGPT, through a copilot-like interface.",
+    "main":  "main.js",
+    "scripts":  {
+                    "dev":  "node esbuild.config.mjs",
+                    "build":  "tsc -noEmit -skipLibCheck \u0026\u0026 node esbuild.config.mjs production",
+                    "version":  "node version-bump.mjs \u0026\u0026 git add manifest.json versions.json",
+                    "smoke:completion":  "node scripts/electron-completion-accept-check.cjs",
+                    "smoke:slash":  "node scripts/electron-smoke.cjs",
+                    "smoke":  "npm run smoke:completion \u0026\u0026 npm run smoke:slash",
+                    "copy-plugin":  "node scripts/copy-plugin-to-vault.mjs",
+                    "release:check":  "node scripts/production-gate.mjs",
+                    "test":  "npm run test:release-gate",
+                    "test:release-gate":  "node scripts/production-gate.test.mjs"
+                },
+    "keywords":  [
+
+                 ],
+    "author":  "rizerphe",
+    "license":  "MIT",
+    "devDependencies":  {
+                            "@types/node":  "^16.11.6",
+                            "@typescript-eslint/eslint-plugin":  "5.29.0",
+                            "@typescript-eslint/parser":  "5.29.0",
+                            "builtin-modules":  "3.3.0",
+                            "esbuild":  "0.17.3",
+                            "obsidian":  "latest",
+                            "tslib":  "2.4.0",
+                            "typescript":  "4.7.4"
+                        },
+    "dependencies":  {
+                         "@types/mustache":  "^4.2.2",
+                         "@types/react":  "^18.0.28",
+                         "@types/react-dom":  "^18.0.11",
+                         "codemirror-companion-extension":  "^0.0.11",
+                         "esbuild-sass-plugin":  "^2.6.0",
+                         "groq-sdk":  "^0.37.0",
+                         "mustache":  "^4.2.0",
+                         "openai":  "^4.17.0",
+                         "react":  "^18.2.0",
+                         "react-dom":  "^18.2.0",
+                         "sass":  "^1.59.2",
+                         "zod":  "^3.21.4"
+                     }
 }

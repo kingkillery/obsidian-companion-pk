@@ -85,14 +85,17 @@ function main() {
   }
 
   {
-    withEnv({
-      RELEASE_CHECK_SKIP_SMOKE: "0",
-      RELEASE_CHECK_SKIP_COPY: "1",
-    }, () => {
-      const parsed = parseReleaseGateArgs(["--vault", "vault-a"]);
-      assert.equal(parsed.options.skipSmoke, false);
-      assert.equal(parsed.options.skipCopy, true);
-    });
+    withEnv(
+      {
+        RELEASE_CHECK_SKIP_SMOKE: "0",
+        RELEASE_CHECK_SKIP_COPY: "1",
+      },
+      () => {
+        const parsed = parseReleaseGateArgs(["--vault", "vault-a"]);
+        assert.equal(parsed.options.skipSmoke, false);
+        assert.equal(parsed.options.skipCopy, true);
+      }
+    );
   }
 
   {
@@ -103,7 +106,7 @@ function main() {
       },
       () => {
         const vaults = parseVaultPaths(["--vault", "vault-a", "--vaults", "vault-b"]);
-        assert.deepEqual(vaults, [cwdVaultA]);
+        assert.deepEqual(vaults, [cwdVaultA, cwdVaultB]);
       }
     );
   }
