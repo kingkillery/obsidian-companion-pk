@@ -1,3 +1,10 @@
+# Provenance Note
+
+Status: mirror or duplicate root for plugin id `companion`  
+Provisional canonical source: [companion](C:\dev\Desktop-Projects\Obsidian Plugins\plugins\companion)
+
+This directory should not be treated as the default editable source of truth unless that workspace decision is explicitly reversed. Use `companion/` for primary source edits by default.
+
 # Obsidian Companion
 
 Companion is an Obsidian plugin that adds an **AI-powered autocomplete** feature to your note-taking and personal knowledge management platform. With Companion, you can write notes more quickly and easily by receiving suggestions for completing words, phrases, and even entire sentences based on the context of your writing. The autocomplete feature uses OpenAI's state-of-the-art **GPT-3 and GPT-3.5, including ChatGPT, and locally hosted Ollama models**, among others, to generate smart suggestions that are tailored to your specific writing style and preferences. Support for more models is planned, too.
